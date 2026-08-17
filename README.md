@@ -1,102 +1,97 @@
-# Wan Ge Niu Bi
+# 万哥牛逼
 
-[English](README.md) | [简体中文](README.zh-CN.md)
+[English](README.en.md) | [简体中文](README.md)
 
-A Codex Skill that runs only when the user explicitly invokes `$wan-ge-niu-bi`. Its bundled GitHub CLI script adds any missing Stars across all public repositories currently owned by `centitenka`, `KinomotoMio`, and `proto-commons`, then returns a verifiable Chinese report.
+一个仅在用户显式调用 `$wan-ge-niu-bi` 时运行的 Codex Skill：使用内置 GitHub CLI 脚本，为 `centitenka`、`KinomotoMio` 与 `proto-commons` 当前拥有的所有公开仓库补充 Star，并返回可核验的中文结果报告。
 
-## Execution Time
+## 执行耗时
 
-The common path is expected to complete in **2–4 seconds**: one GraphQL query retrieves the account, all three owners' public repositories, current Star counts, and `viewerHasStarred`. This is not an SLA; network latency, GitHub API retries, pagination beyond 100 repositories per owner, and the number of missing Stars can all increase runtime.
+常见路径通常预计在 **2–4 秒**内完成：一次 GraphQL 查询同时取得账号、三方的公开仓库、当前 Stars 与 `viewerHasStarred`。这不是 SLA；网络延迟、GitHub API 重试、任一方超过 100 个仓库后的分页，以及实际需要补 Star 的仓库数量都会增加耗时。
 
-| Measured metric | Real Dry Run on 2026-08-17 |
+| 实测指标 | 2026-08-17 真实 Dry Run |
 | --- | ---: |
-| Environment | Windows · PowerShell 7 |
-| Elapsed | **2.33 seconds** |
-| Public repositories | 44 |
-| Verified starred | 44/44 |
-| Total project Stars | 129 |
-| GraphQL API calls | 1 |
-| PUT attempts | 0 |
+| 环境 | Windows · PowerShell 7 |
+| 耗时 | **2.33 秒** |
+| 公开仓库 | 44 |
+| 已 Star | 44/44 |
+| 项目累计 Stars | 129 |
+| GraphQL API 调用 | 1 |
+| PUT 尝试 | 0 |
 
-## Real Output
+## 项目总榜
 
-The following is an English rendering of the script output from the same real, read-only Dry Run on 2026-08-17. Repository and Star counts change with live GitHub state, so this is a dated measurement rather than a permanent promise.
+以下排名来自 2026-08-17 的真实只读 Dry Run。仓库数量与 Stars 会随 GitHub 实时状态变化；Top 10 直接展示，其余项目可按需展开。
+
+| 排名 | 项目 | 作者 | 当前 Stars | 状态 |
+| ---: | --- | --- | ---: | --- |
+| 🥇 | **[ai-dokkai](https://github.com/KinomotoMio/ai-dokkai)** | KinomotoMio | ⭐ 14 | ✅ 原已 Star |
+| 🥈 | **[cc-persona](https://github.com/proto-commons/cc-persona)** | proto-commons | ⭐ 10 | ✅ 原已 Star |
+| 🥉 | **[Moodiary](https://github.com/KinomotoMio/Moodiary)** | KinomotoMio | ⭐ 8 | ✅ 原已 Star |
+| #4 | [ZhiYan-Legacy](https://github.com/proto-commons/ZhiYan-Legacy) | proto-commons | ⭐ 7 | ✅ 原已 Star |
+| #5 | [issue-creator](https://github.com/centitenka/issue-creator) | centitenka | ⭐ 4 | ✅ 原已 Star |
+| #6 | [issue-to-pr](https://github.com/centitenka/issue-to-pr) | centitenka | ⭐ 4 | ✅ 原已 Star |
+| #7 | [conda2uv](https://github.com/KinomotoMio/conda2uv) | KinomotoMio | ⭐ 4 | ✅ 原已 Star |
+| #8 | [MCPSecTrace](https://github.com/KinomotoMio/MCPSecTrace) | KinomotoMio | ⭐ 4 | ✅ 原已 Star |
+| #9 | [KinomotoMio](https://github.com/KinomotoMio/KinomotoMio) | KinomotoMio | ⭐ 3 | ✅ 原已 Star |
+| #10 | [resumaker](https://github.com/KinomotoMio/resumaker) | KinomotoMio | ⭐ 3 | ✅ 原已 Star |
 
 <details>
-<summary><strong>Show the complete 44-project report</strong></summary>
+<summary><strong>查看第 11–44 名</strong></summary>
 
-# ⭐ Wan Ge Niu Bi | Execution Report
-
-> 🧭 Dry Run · 44/44 starred · 0 pending · ⭐ Total project Stars 129
->
-> Account: `Daniel9572` · API calls: 1
-
-## Global Project Ranking
-
-| Rank | Project | Owner | Current Stars | Status |
+| 排名 | 项目 | 作者 | 当前 Stars | 状态 |
 | ---: | --- | --- | ---: | --- |
-| 🥇 | **[ai-dokkai](https://github.com/KinomotoMio/ai-dokkai)** | KinomotoMio | ⭐ 14 | ✅ Already starred |
-| 🥈 | **[cc-persona](https://github.com/proto-commons/cc-persona)** | proto-commons | ⭐ 10 | ✅ Already starred |
-| 🥉 | **[Moodiary](https://github.com/KinomotoMio/Moodiary)** | KinomotoMio | ⭐ 8 | ✅ Already starred |
-| #4 | [ZhiYan-Legacy](https://github.com/proto-commons/ZhiYan-Legacy) | proto-commons | ⭐ 7 | ✅ Already starred |
-| #5 | [issue-creator](https://github.com/centitenka/issue-creator) | centitenka | ⭐ 4 | ✅ Already starred |
-| #6 | [issue-to-pr](https://github.com/centitenka/issue-to-pr) | centitenka | ⭐ 4 | ✅ Already starred |
-| #7 | [conda2uv](https://github.com/KinomotoMio/conda2uv) | KinomotoMio | ⭐ 4 | ✅ Already starred |
-| #8 | [MCPSecTrace](https://github.com/KinomotoMio/MCPSecTrace) | KinomotoMio | ⭐ 4 | ✅ Already starred |
-| #9 | [KinomotoMio](https://github.com/KinomotoMio/KinomotoMio) | KinomotoMio | ⭐ 3 | ✅ Already starred |
-| #10 | [resumaker](https://github.com/KinomotoMio/resumaker) | KinomotoMio | ⭐ 3 | ✅ Already starred |
-| #11 | [zotero-agent-copilot](https://github.com/KinomotoMio/zotero-agent-copilot) | KinomotoMio | ⭐ 3 | ✅ Already starred |
-| #12 | [Browser-bg-swap](https://github.com/proto-commons/Browser-bg-swap) | proto-commons | ⭐ 3 | ✅ Already starred |
-| #13 | [TV_Caster](https://github.com/proto-commons/TV_Caster) | proto-commons | ⭐ 3 | ✅ Already starred |
-| #14 | [ai-review-resolver](https://github.com/centitenka/ai-review-resolver) | centitenka | ⭐ 2 | ✅ Already starred |
-| #15 | [ai-reviewer](https://github.com/centitenka/ai-reviewer) | centitenka | ⭐ 2 | ✅ Already starred |
-| #16 | [atomic-commits](https://github.com/centitenka/atomic-commits) | centitenka | ⭐ 2 | ✅ Already starred |
-| #17 | [code-simplifier](https://github.com/centitenka/code-simplifier) | centitenka | ⭐ 2 | ✅ Already starred |
-| #18 | [comments-clean](https://github.com/centitenka/comments-clean) | centitenka | ⭐ 2 | ✅ Already starred |
-| #19 | [issue-planner](https://github.com/centitenka/issue-planner) | centitenka | ⭐ 2 | ✅ Already starred |
-| #20 | [open-your-mind](https://github.com/centitenka/open-your-mind) | centitenka | ⭐ 2 | ✅ Already starred |
-| #21 | [project-board](https://github.com/centitenka/project-board) | centitenka | ⭐ 2 | ✅ Already starred |
-| #22 | [vibe-explainer](https://github.com/centitenka/vibe-explainer) | centitenka | ⭐ 2 | ✅ Already starred |
-| #23 | [agent-speak](https://github.com/KinomotoMio/agent-speak) | KinomotoMio | ⭐ 2 | ✅ Already starred |
-| #24 | [Amanita](https://github.com/KinomotoMio/Amanita) | KinomotoMio | ⭐ 2 | ✅ Already starred |
-| #25 | [Anything2Ontology](https://github.com/KinomotoMio/Anything2Ontology) | KinomotoMio | ⭐ 2 | ✅ Already starred |
-| #26 | [cli](https://github.com/KinomotoMio/cli) | KinomotoMio | ⭐ 2 | ✅ Already starred |
-| #27 | [deep-learning-from-scratch-4](https://github.com/KinomotoMio/deep-learning-from-scratch-4) | KinomotoMio | ⭐ 2 | ✅ Already starred |
-| #28 | [deepseek-harness](https://github.com/KinomotoMio/deepseek-harness) | KinomotoMio | ⭐ 2 | ✅ Already starred |
-| #29 | [dify](https://github.com/KinomotoMio/dify) | KinomotoMio | ⭐ 2 | ✅ Already starred |
-| #30 | [HustRef](https://github.com/KinomotoMio/HustRef) | KinomotoMio | ⭐ 2 | ✅ Already starred |
-| #31 | [linear-cli](https://github.com/KinomotoMio/linear-cli) | KinomotoMio | ⭐ 2 | ✅ Already starred |
-| #32 | [MaaAssistantArknights](https://github.com/KinomotoMio/MaaAssistantArknights) | KinomotoMio | ⭐ 2 | ✅ Already starred |
-| #33 | [MCPSecBench](https://github.com/KinomotoMio/MCPSecBench) | KinomotoMio | ⭐ 2 | ✅ Already starred |
-| #34 | [nanoclaw](https://github.com/KinomotoMio/nanoclaw) | KinomotoMio | ⭐ 2 | ✅ Already starred |
-| #35 | [obelisk](https://github.com/KinomotoMio/obelisk) | KinomotoMio | ⭐ 2 | ✅ Already starred |
-| #36 | [oil-motion](https://github.com/KinomotoMio/oil-motion) | KinomotoMio | ⭐ 2 | ✅ Already starred |
-| #37 | [opendal](https://github.com/KinomotoMio/opendal) | KinomotoMio | ⭐ 2 | ✅ Already starred |
-| #38 | [pdf2skills](https://github.com/KinomotoMio/pdf2skills) | KinomotoMio | ⭐ 2 | ✅ Already starred |
-| #39 | [TikzConvertor](https://github.com/KinomotoMio/TikzConvertor) | KinomotoMio | ⭐ 2 | ✅ Already starred |
-| #40 | [YASA-Engine](https://github.com/KinomotoMio/YASA-Engine) | KinomotoMio | ⭐ 2 | ✅ Already starred |
-| #41 | [YASA-UAST](https://github.com/KinomotoMio/YASA-UAST) | KinomotoMio | ⭐ 2 | ✅ Already starred |
-| #42 | [AIMoeMaker](https://github.com/proto-commons/AIMoeMaker) | proto-commons | ⭐ 1 | ✅ Already starred |
-| #43 | [hopper](https://github.com/proto-commons/hopper) | proto-commons | ⭐ 1 | ✅ Already starred |
-| #44 | [proto-skills](https://github.com/proto-commons/proto-skills) | proto-commons | ⭐ 1 | ✅ Already starred |
+| #11 | [zotero-agent-copilot](https://github.com/KinomotoMio/zotero-agent-copilot) | KinomotoMio | ⭐ 3 | ✅ 原已 Star |
+| #12 | [Browser-bg-swap](https://github.com/proto-commons/Browser-bg-swap) | proto-commons | ⭐ 3 | ✅ 原已 Star |
+| #13 | [TV_Caster](https://github.com/proto-commons/TV_Caster) | proto-commons | ⭐ 3 | ✅ 原已 Star |
+| #14 | [ai-review-resolver](https://github.com/centitenka/ai-review-resolver) | centitenka | ⭐ 2 | ✅ 原已 Star |
+| #15 | [ai-reviewer](https://github.com/centitenka/ai-reviewer) | centitenka | ⭐ 2 | ✅ 原已 Star |
+| #16 | [atomic-commits](https://github.com/centitenka/atomic-commits) | centitenka | ⭐ 2 | ✅ 原已 Star |
+| #17 | [code-simplifier](https://github.com/centitenka/code-simplifier) | centitenka | ⭐ 2 | ✅ 原已 Star |
+| #18 | [comments-clean](https://github.com/centitenka/comments-clean) | centitenka | ⭐ 2 | ✅ 原已 Star |
+| #19 | [issue-planner](https://github.com/centitenka/issue-planner) | centitenka | ⭐ 2 | ✅ 原已 Star |
+| #20 | [open-your-mind](https://github.com/centitenka/open-your-mind) | centitenka | ⭐ 2 | ✅ 原已 Star |
+| #21 | [project-board](https://github.com/centitenka/project-board) | centitenka | ⭐ 2 | ✅ 原已 Star |
+| #22 | [vibe-explainer](https://github.com/centitenka/vibe-explainer) | centitenka | ⭐ 2 | ✅ 原已 Star |
+| #23 | [agent-speak](https://github.com/KinomotoMio/agent-speak) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
+| #24 | [Amanita](https://github.com/KinomotoMio/Amanita) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
+| #25 | [Anything2Ontology](https://github.com/KinomotoMio/Anything2Ontology) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
+| #26 | [cli](https://github.com/KinomotoMio/cli) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
+| #27 | [deep-learning-from-scratch-4](https://github.com/KinomotoMio/deep-learning-from-scratch-4) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
+| #28 | [deepseek-harness](https://github.com/KinomotoMio/deepseek-harness) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
+| #29 | [dify](https://github.com/KinomotoMio/dify) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
+| #30 | [HustRef](https://github.com/KinomotoMio/HustRef) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
+| #31 | [linear-cli](https://github.com/KinomotoMio/linear-cli) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
+| #32 | [MaaAssistantArknights](https://github.com/KinomotoMio/MaaAssistantArknights) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
+| #33 | [MCPSecBench](https://github.com/KinomotoMio/MCPSecBench) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
+| #34 | [nanoclaw](https://github.com/KinomotoMio/nanoclaw) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
+| #35 | [obelisk](https://github.com/KinomotoMio/obelisk) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
+| #36 | [oil-motion](https://github.com/KinomotoMio/oil-motion) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
+| #37 | [opendal](https://github.com/KinomotoMio/opendal) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
+| #38 | [pdf2skills](https://github.com/KinomotoMio/pdf2skills) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
+| #39 | [TikzConvertor](https://github.com/KinomotoMio/TikzConvertor) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
+| #40 | [YASA-Engine](https://github.com/KinomotoMio/YASA-Engine) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
+| #41 | [YASA-UAST](https://github.com/KinomotoMio/YASA-UAST) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
+| #42 | [AIMoeMaker](https://github.com/proto-commons/AIMoeMaker) | proto-commons | ⭐ 1 | ✅ 原已 Star |
+| #43 | [hopper](https://github.com/proto-commons/hopper) | proto-commons | ⭐ 1 | ✅ 原已 Star |
+| #44 | [proto-skills](https://github.com/proto-commons/proto-skills) | proto-commons | ⭐ 1 | ✅ 原已 Star |
 
-## Owner Summary
+</details>
 
-| Owner | Public repositories | Total project Stars | Pending | Failed |
+## 作者概览
+
+| 作者 | 公开仓库 | 项目累计 Stars | 待新增 | 失败 |
 | --- | ---: | ---: | ---: | ---: |
 | centitenka | 11 | 26 | 0 | 0 |
 | KinomotoMio | 26 | 77 | 0 | 0 |
 | proto-commons | 7 | 26 | 0 | 0 |
 
-Private repositories are not queried or modified, per policy.
+私有仓库：按规则不查询、不操作。
 
-</details>
+## 使用边界
 
-## Boundaries
+- 仅响应显式的 `$wan-ge-niu-bi` 调用；不会因普通的 GitHub、仓库、作者或 Star 请求而自动执行。
+- 目标固定为 `centitenka`、`KinomotoMio` 与 `proto-commons` 的公开仓库；不查询或操作私有仓库。
+- 只会添加 Star，绝不会取消任何已有 Star。
+- 每次执行都会重新发现公开仓库，并以脚本最终的核验结果为准。
 
-- Runs only after an explicit `$wan-ge-niu-bi` invocation; ordinary GitHub, repository, owner, or Star requests do not trigger it.
-- Targets only public repositories owned by `centitenka`, `KinomotoMio`, and `proto-commons`; private repositories are never queried or modified.
-- Adds missing Stars only and never removes an existing Star.
-- Rediscovers public repositories on every run and treats the script's final verification as authoritative.
-
-See [SKILL.md](SKILL.md) for implementation details and failure-handling rules.
+实现细节与故障处理规则见 [SKILL.md](SKILL.md)。
