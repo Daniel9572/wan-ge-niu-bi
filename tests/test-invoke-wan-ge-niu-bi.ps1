@@ -43,8 +43,10 @@ if ($RemainingArguments.Count -gt 0) {
         if (-not $isOwnerPage -and
             (-not $queryArgument.Contains('$centitenkaLogin') -or
              -not $queryArgument.Contains('$kinomotoMioLogin') -or
+             -not $queryArgument.Contains('$protoCommonsLogin') -or
              $arguments -notcontains 'centitenkaLogin=centitenka' -or
-             $arguments -notcontains 'kinomotoMioLogin=KinomotoMio')) {
+             $arguments -notcontains 'kinomotoMioLogin=KinomotoMio' -or
+             $arguments -notcontains 'protoCommonsLogin=proto-commons')) {
             'gh: initial GraphQL query must pass target logins as variables'
             exit 2
         }
@@ -119,6 +121,25 @@ if ($RemainingArguments.Count -gt 0) {
                                 isPrivate = $false
                                 viewerHasStarred = $repoBStarred
                                 stargazerCount = 80
+                            }
+                        )
+                        pageInfo = [ordered]@{
+                            hasNextPage = $false
+                            endCursor = $null
+                        }
+                    }
+                }
+                protoCommons = [ordered]@{
+                    login = 'proto-commons'
+                    repositories = [ordered]@{
+                        nodes = @(
+                            [ordered]@{
+                                id = 'repo-d-id'
+                                name = 'transferred-project'
+                                nameWithOwner = 'proto-commons/transferred-project'
+                                isPrivate = $false
+                                viewerHasStarred = $true
+                                stargazerCount = 500
                             }
                         )
                         pageInfo = [ordered]@{
@@ -270,10 +291,10 @@ $partial = Invoke-Target -Scenario 'write-failure' -GhPath $fakeGh
 Assert-Equal $partial.exit_code 30 'partial process exit'
 Assert-Equal $partial.json.status 'partial' 'partial status'
 Assert-Equal $partial.json.totals.failed 1 'partial failed count'
-Assert-Equal $partial.json.ranking[1].state 'failed' `
+Assert-Equal $partial.json.ranking[2].state 'failed' `
     'partial ranking state'
 Assert-True ($partial.json.markdown -match [regex]::Escape(
-    '| 🥈 | **[repo-b](https://github.com/KinomotoMio/repo-b)** | KinomotoMio | ⭐ 80 | ⚠️ 失败 |'
+    '| 🥉 | **[repo-b](https://github.com/KinomotoMio/repo-b)** | KinomotoMio | ⭐ 80 | ⚠️ 失败 |'
 )) 'partial failed ranking row'
 Assert-True ($partial.json.markdown -match '## ⚠️ 失败详情') `
     'partial failure details'
@@ -282,17 +303,17 @@ $dryRun = Invoke-Target -Scenario 'dry-run' -GhPath $fakeGh -DryRun
 Assert-Equal $dryRun.exit_code 0 'dry run process exit'
 Assert-Equal $dryRun.json.status 'dry_run' 'dry run status'
 Assert-Equal $dryRun.json.exit_code 0 'dry run JSON exit'
-Assert-Equal $dryRun.json.totals.verified_starred 1 `
+Assert-Equal $dryRun.json.totals.verified_starred 2 `
     'dry run verified count'
 Assert-Equal $dryRun.json.totals.would_star 1 `
     'dry run pending count'
-Assert-Equal $dryRun.json.ranking[1].state 'would_star' `
+Assert-Equal $dryRun.json.ranking[2].state 'would_star' `
     'dry run ranking state'
 Assert-Equal $dryRun.json.api.put_attempts 0 'dry run PUT attempts'
 Assert-True ($dryRun.json.markdown -match '🧭 Dry Run') `
     'dry run markdown'
 Assert-True ($dryRun.json.markdown -match [regex]::Escape(
-    '| 🥈 | **[repo-b](https://github.com/KinomotoMio/repo-b)** | KinomotoMio | ⭐ 80 | 🧭 待新增 |'
+    '| 🥉 | **[repo-b](https://github.com/KinomotoMio/repo-b)** | KinomotoMio | ⭐ 80 | 🧭 待新增 |'
 )) 'dry run ranking row'
 
 $fastPathLog = [IO.Path]::GetTempFileName()
@@ -307,12 +328,18 @@ try {
         'already complete API calls'
     Assert-Equal $alreadyComplete.json.api.put_attempts 0 `
         'already complete PUT attempts'
-    Assert-Equal $alreadyComplete.json.totals.stars_received 1280 `
+    Assert-Equal $alreadyComplete.json.fixed_targets.Count 3 `
+        'already complete fixed target count'
+    Assert-Equal $alreadyComplete.json.fixed_targets[2] 'proto-commons' `
+        'third fixed target'
+    Assert-Equal $alreadyComplete.json.totals.stars_received 1780 `
         'already complete total Stars'
     Assert-Equal $alreadyComplete.json.targets[0].stars_received 1200 `
         'centitenka total Stars'
     Assert-Equal $alreadyComplete.json.targets[1].stars_received 80 `
         'KinomotoMio total Stars'
+    Assert-Equal $alreadyComplete.json.targets[2].stars_received 500 `
+        'proto-commons total Stars'
 
     $fastPathCalls = @(Get-Content -LiteralPath $fastPathLog)
     Assert-Equal @($fastPathCalls | Where-Object {
@@ -334,31 +361,35 @@ try {
         -GhPath $fakeGh -LogPath $paginationLog
     Assert-Equal $pagination.exit_code 0 'pagination process exit'
     Assert-Equal $pagination.json.status 'complete' 'pagination status'
-    Assert-Equal $pagination.json.totals.public_repositories 3 `
+    Assert-Equal $pagination.json.totals.public_repositories 4 `
         'pagination public repository count'
-    Assert-Equal $pagination.json.totals.verified_starred 3 `
+    Assert-Equal $pagination.json.totals.verified_starred 4 `
         'pagination verified count'
     Assert-Equal $pagination.json.api.calls 2 'pagination API calls'
     Assert-Equal $pagination.json.api.put_attempts 0 `
         'pagination PUT attempts'
-    Assert-Equal $pagination.json.totals.stars_received 2480 `
+    Assert-Equal $pagination.json.totals.stars_received 2980 `
         'pagination total Stars'
-    Assert-Equal $pagination.json.ranking.Count 3 `
+    Assert-Equal $pagination.json.ranking.Count 4 `
         'pagination ranking count'
     Assert-Equal $pagination.json.ranking[0].repository 'repo-a' `
         'pagination first ranked repository'
     Assert-Equal $pagination.json.ranking[1].repository 'repo-c' `
         'pagination tie break repository'
-    Assert-Equal $pagination.json.ranking[2].repository 'repo-b' `
+    Assert-Equal $pagination.json.ranking[2].repository 'transferred-project' `
         'pagination third ranked repository'
+    Assert-Equal $pagination.json.ranking[3].repository 'repo-b' `
+        'pagination fourth ranked repository'
     Assert-Equal $pagination.json.ranking[0].badge '🥇' `
         'pagination gold badge'
     Assert-Equal $pagination.json.ranking[1].badge '🥈' `
         'pagination silver badge'
     Assert-Equal $pagination.json.ranking[2].badge '🥉' `
         'pagination bronze badge'
+    Assert-Equal $pagination.json.ranking[3].badge '#4' `
+        'pagination fourth badge'
     Assert-True ($pagination.json.markdown -match [regex]::Escape(
-        '| 🥉 | **[repo-b](https://github.com/KinomotoMio/repo-b)** | KinomotoMio | ⭐ 80 | ✅ 原已 Star |'
+        '| 🥉 | **[transferred-project](https://github.com/proto-commons/transferred-project)** | proto-commons | ⭐ 500 | ✅ 原已 Star |'
     )) 'bronze ranking row'
 
     $paginationCalls = @(Get-Content -LiteralPath $paginationLog)
@@ -379,7 +410,7 @@ try {
     Assert-Equal $complete.exit_code 0 'complete process exit'
     Assert-Equal $complete.json.status 'complete' 'complete status'
     Assert-Equal $complete.json.totals.newly_starred 1 'new Star count'
-    Assert-Equal $complete.json.totals.verified_starred 2 `
+    Assert-Equal $complete.json.totals.verified_starred 3 `
         'complete verified count'
     Assert-Equal $complete.json.api.calls 3 'complete API calls'
     Assert-True ($complete.json.markdown -match '✅ 已完成') `
@@ -391,8 +422,11 @@ try {
         '| 🥇 | **[repo-a](https://github.com/centitenka/repo-a)** | centitenka | ⭐ 1,200 | ✅ 原已 Star |'
     )) 'gold ranking row'
     Assert-True ($complete.json.markdown -match [regex]::Escape(
-        '| 🥈 | **[repo-b](https://github.com/KinomotoMio/repo-b)** | KinomotoMio | ⭐ 80 | 🆕 本次新增 |'
+        '| 🥈 | **[transferred-project](https://github.com/proto-commons/transferred-project)** | proto-commons | ⭐ 500 | ✅ 原已 Star |'
     )) 'silver ranking row'
+    Assert-True ($complete.json.markdown -match [regex]::Escape(
+        '| 🥉 | **[repo-b](https://github.com/KinomotoMio/repo-b)** | KinomotoMio | ⭐ 80 | 🆕 本次新增 |'
+    )) 'bronze newly starred row'
     Assert-True ($complete.json.markdown -notmatch '原本已 Star：') `
         'legacy repository list removed'
 

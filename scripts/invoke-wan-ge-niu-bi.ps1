@@ -24,6 +24,10 @@ $targets = @(
     [pscustomobject]@{
         owner = 'KinomotoMio'
         alias = 'kinomotoMio'
+    },
+    [pscustomobject]@{
+        owner = 'proto-commons'
+        alias = 'protoCommons'
     }
 )
 
@@ -31,6 +35,7 @@ $initialStateQuery = @'
 query WanGeNiuBiState(
   $centitenkaLogin: String!
   $kinomotoMioLogin: String!
+  $protoCommonsLogin: String!
 ) {
   viewer { login }
   centitenka: repositoryOwner(login: $centitenkaLogin) {
@@ -46,6 +51,18 @@ query WanGeNiuBiState(
     }
   }
   kinomotoMio: repositoryOwner(login: $kinomotoMioLogin) {
+    login
+    repositories(
+      first: 100
+      privacy: PUBLIC
+      ownerAffiliations: [OWNER]
+      orderBy: { field: NAME, direction: ASC }
+    ) {
+      nodes { id name nameWithOwner isPrivate viewerHasStarred stargazerCount }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+  protoCommons: repositoryOwner(login: $protoCommonsLogin) {
     login
     repositories(
       first: 100
@@ -237,6 +254,7 @@ function Get-GitHubState {
         -Variables ([ordered]@{
             centitenkaLogin = 'centitenka'
             kinomotoMioLogin = 'KinomotoMio'
+            protoCommonsLogin = 'proto-commons'
         })
     $authenticatedLogin = [string]$data.viewer.login
     if ([string]::IsNullOrWhiteSpace($authenticatedLogin)) {

@@ -1,13 +1,13 @@
 ---
 name: wan-ge-niu-bi
-description: Deterministically star every public GitHub repository currently owned by centitenka and KinomotoMio with the bundled GitHub CLI scripts, then return a verified Chinese report. Use only when the user explicitly invokes $wan-ge-niu-bi; never invoke it implicitly from ordinary GitHub, repository, author, or Star requests.
+description: Deterministically star every public GitHub repository currently owned by centitenka, KinomotoMio, and proto-commons with the bundled GitHub CLI scripts, then return a verified Chinese report. Use only when the user explicitly invokes $wan-ge-niu-bi; never invoke it implicitly from ordinary GitHub, repository, author, or Star requests.
 ---
 
 # 万哥牛逼
 
 Run only after the user explicitly invokes `$wan-ge-niu-bi`. Treat that invocation
 as authorization to add Stars only to public repositories currently owned by
-`centitenka` and `KinomotoMio`.
+`centitenka`, `KinomotoMio`, and `proto-commons`.
 
 ## Execute
 
