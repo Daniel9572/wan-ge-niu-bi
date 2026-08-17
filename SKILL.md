@@ -11,21 +11,22 @@ as authorization to add Stars only to public repositories currently owned by
 
 ## Execute
 
-1. Run `scripts/invoke-wan-ge-niu-bi.ps1 -OutputFormat Markdown`.
-2. If it exits `10` from a restricted or sandboxed process, rerun the same script
-   once in the normal user context. Do not diagnose token expiry from the
-   restricted-context result.
-3. On exit `0`, return the script's Markdown output verbatim. Do not rediscover
-   repositories, reinterpret Star state, or rebuild the report in the model.
-4. Report nonzero results precisely:
-   - `10`: GitHub CLI or its credential is unavailable to the current context.
-   - `11`: a visible credential was rejected by GitHub.
-   - `20`: live repository or Star discovery failed.
-   - `30`: one or more repositories remain unverified after the scripted run.
-5. Use an authenticated connector or connected browser only if deterministic CLI
-   execution remains unavailable in the normal user context. With a browser,
-   never click `Unstar`; verify each changed control and perform a final full-scope
-   check before reporting completion.
+1. Make the first GitHub operation a single run of
+   `scripts/invoke-wan-ge-niu-bi.ps1 -OutputFormat Json` in the normal user
+   context, requesting host approval if required. State in the approval request
+   that the command may add Stars to the fixed targets' public repositories and
+   never removes Stars.
+2. Parse the single JSON object and use its `status` field as authoritative even
+   if the host normalizes nonzero process exit codes. Return its `markdown` field
+   verbatim for `complete`, `partial`, `credential_rejected`, `discovery_failed`,
+   or diagnostic `dry_run` results. Do not rediscover repositories, reinterpret
+   Star state, or rebuild the report in the model.
+3. If `status` is `cli_unavailable` or `credential_unavailable`, use an
+   authenticated connector or connected browser. If neither is available,
+   return the script's `markdown` field verbatim.
+4. If the host cannot provide normal user execution, use the same connector or
+   browser fallback. With a browser, never click `Unstar`; verify each changed
+   control and perform a final full-scope check before reporting completion.
 
 ## Boundaries
 

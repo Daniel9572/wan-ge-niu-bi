@@ -1,7 +1,7 @@
 interface:
   display_name: "万哥牛逼"
   short_description: "为两个固定 GitHub 作者的公开仓库补齐 Star 并分组汇报"
-  default_prompt: "使用 $wan-ge-niu-bi 为 centitenka 和 KinomotoMio 的全部公开仓库补齐 Star，并分组汇报新增、原有、跳过和失败项目。"
+  default_prompt: "使用 $wan-ge-niu-bi 为 centitenka 和 KinomotoMio 的全部公开仓库补齐 Star，并分组汇报新增、原有和失败项目。"
 
 policy:
   allow_implicit_invocation: false

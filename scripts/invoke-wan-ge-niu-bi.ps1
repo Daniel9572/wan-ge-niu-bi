@@ -1,12 +1,9 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [ValidateSet('Markdown', 'Json')]
     [string]$OutputFormat = 'Markdown',
 
     [switch]$DryRun,
-
-    [ValidateRange(1, 100)]
-    [int]$BatchSize = 20,
 
     [string]$GhPath = ''
 )
@@ -22,13 +19,64 @@ $hostname = 'github.com'
 $targets = @(
     [pscustomobject]@{
         owner = 'centitenka'
-        endpoint = 'orgs/centitenka/repos?type=public&per_page=100&sort=full_name&direction=asc'
+        alias = 'centitenka'
     },
     [pscustomobject]@{
         owner = 'KinomotoMio'
-        endpoint = 'users/KinomotoMio/repos?type=owner&per_page=100&sort=full_name&direction=asc'
+        alias = 'kinomotoMio'
     }
 )
+
+$initialStateQuery = @'
+query WanGeNiuBiState(
+  $centitenkaLogin: String!
+  $kinomotoMioLogin: String!
+) {
+  viewer { login }
+  centitenka: repositoryOwner(login: $centitenkaLogin) {
+    login
+    repositories(
+      first: 100
+      privacy: PUBLIC
+      ownerAffiliations: [OWNER]
+      orderBy: { field: NAME, direction: ASC }
+    ) {
+      nodes { id name nameWithOwner isPrivate viewerHasStarred stargazerCount }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+  kinomotoMio: repositoryOwner(login: $kinomotoMioLogin) {
+    login
+    repositories(
+      first: 100
+      privacy: PUBLIC
+      ownerAffiliations: [OWNER]
+      orderBy: { field: NAME, direction: ASC }
+    ) {
+      nodes { id name nameWithOwner isPrivate viewerHasStarred stargazerCount }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+}
+'@
+
+$ownerPageQuery = @'
+query WanGeNiuBiOwnerPage($login: String!, $endCursor: String) {
+  repositoryOwner(login: $login) {
+    login
+    repositories(
+      first: 100
+      after: $endCursor
+      privacy: PUBLIC
+      ownerAffiliations: [OWNER]
+      orderBy: { field: NAME, direction: ASC }
+    ) {
+      nodes { id name nameWithOwner isPrivate viewerHasStarred stargazerCount }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+}
+'@
 
 $script:resolvedGhPath = ''
 $script:apiCallCount = 0
@@ -63,13 +111,11 @@ function Test-RetryableFailure {
 function Invoke-GhApiLines {
     param(
         [Parameter(Mandatory = $true)]
-        [string[]]$Arguments,
-
-        [ValidateRange(1, 5)]
-        [int]$MaxAttempts = 3
+        [string[]]$Arguments
     )
 
-    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+    $maxAttempts = 3
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
         $script:apiCallCount++
         $output = @(& $script:resolvedGhPath api @Arguments 2>&1)
         $exitCode = $LASTEXITCODE
@@ -83,7 +129,7 @@ function Invoke-GhApiLines {
         }
 
         $message = Protect-Text (($output | ForEach-Object { [string]$_ }) -join ' ')
-        if ($attempt -lt $MaxAttempts -and (Test-RetryableFailure $message)) {
+        if ($attempt -lt $maxAttempts -and (Test-RetryableFailure $message)) {
             Start-Sleep -Seconds ([Math]::Pow(2, $attempt - 1))
             continue
         }
@@ -95,57 +141,177 @@ function Invoke-GhApiLines {
     }
 }
 
-function Get-TargetRepositories {
-    $result = [ordered]@{}
+function Invoke-GraphQlQuery {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Query,
+
+        [System.Collections.IDictionary]$Variables
+    )
+
+    $arguments = [System.Collections.Generic.List[string]]::new()
+    $arguments.Add('graphql')
+    $arguments.Add('--hostname')
+    $arguments.Add($hostname)
+    if ($null -ne $Variables) {
+        foreach ($key in $Variables.Keys) {
+            $arguments.Add('-F')
+            $arguments.Add("$key=$($Variables[$key])")
+        }
+    }
+    $arguments.Add('-f')
+    $arguments.Add("query=$Query")
+
+    $lines = @(Invoke-GhApiLines -Arguments @($arguments))
+    try {
+        $response = ($lines -join [Environment]::NewLine) |
+            ConvertFrom-Json
+    } catch {
+        throw [System.InvalidOperationException]::new(
+            "GitHub GraphQL returned invalid JSON: $(Protect-Text $_.Exception.Message)"
+        )
+    }
+
+    if ($response.PSObject.Properties.Name -contains 'errors' -and
+        @($response.errors).Count -gt 0) {
+        $messages = @(
+            $response.errors |
+                ForEach-Object { Protect-Text ([string]$_.message) }
+        )
+        throw [System.InvalidOperationException]::new(
+            "GitHub GraphQL error: $($messages -join '; ')"
+        )
+    }
+    if (-not ($response.PSObject.Properties.Name -contains 'data') -or
+        $null -eq $response.data) {
+        throw [System.InvalidOperationException]::new(
+            'GitHub GraphQL returned no data.'
+        )
+    }
+
+    return $response.data
+}
+
+function Add-RepositoryNodes {
+    param(
+        [Parameter(Mandatory = $true)][string]$Owner,
+        [object[]]$Nodes,
+        [Parameter(Mandatory = $true)]
+        [System.Collections.IDictionary]$RepositoryLists,
+        [System.Collections.Generic.HashSet[string]]$Seen,
+        [System.Collections.Generic.HashSet[string]]$StarredSet
+    )
+
+    foreach ($node in @($Nodes)) {
+        if ($null -eq $node -or [bool]$node.isPrivate) {
+            continue
+        }
+
+        $fullName = [string]$node.nameWithOwner
+        $expectedPrefix = "$Owner/"
+        if ([string]::IsNullOrWhiteSpace($fullName) -or
+            -not $fullName.StartsWith(
+                $expectedPrefix,
+                [System.StringComparison]::OrdinalIgnoreCase
+            )) {
+            throw "Unexpected repository owner in GraphQL response: $fullName"
+        }
+        if (-not $Seen.Add($fullName)) {
+            continue
+        }
+
+        $RepositoryLists[$Owner].Add([pscustomobject]@{
+            owner = $Owner
+            name = [string]$node.name
+            full_name = $fullName
+            star_count = [int64]$node.stargazerCount
+        })
+        if ([bool]$node.viewerHasStarred) {
+            [void]$StarredSet.Add($fullName)
+        }
+    }
+}
+
+function Get-GitHubState {
+    $data = Invoke-GraphQlQuery -Query $initialStateQuery `
+        -Variables ([ordered]@{
+            centitenkaLogin = 'centitenka'
+            kinomotoMioLogin = 'KinomotoMio'
+        })
+    $authenticatedLogin = [string]$data.viewer.login
+    if ([string]::IsNullOrWhiteSpace($authenticatedLogin)) {
+        throw 'GitHub GraphQL did not return the authenticated account.'
+    }
+
+    $repositoryLists = [ordered]@{}
     $seen = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::OrdinalIgnoreCase
+    )
+    $starredSet = [System.Collections.Generic.HashSet[string]]::new(
         [System.StringComparer]::OrdinalIgnoreCase
     )
 
     foreach ($target in $targets) {
-        $lines = @(Invoke-GhApiLines -Arguments @(
-            $target.endpoint,
-            '--paginate',
-            '--jq',
-            '.[] | [.full_name, .name, .private, .fork, .archived] | @tsv',
-            '--header',
-            'Accept: application/vnd.github+json',
-            '--header',
-            "X-GitHub-Api-Version: $apiVersion"
-        ))
-
-        $repositories = [System.Collections.Generic.List[object]]::new()
-        foreach ($line in $lines) {
-            $parts = $line -split "`t", 5
-            if ($parts.Count -ne 5) {
-                throw "Unexpected repository row returned for $($target.owner)."
-            }
-
-            $fullName = [string]$parts[0]
-            $expectedPrefix = "$($target.owner)/"
-            if (-not $fullName.StartsWith(
-                    $expectedPrefix,
-                    [System.StringComparison]::OrdinalIgnoreCase
-                )) {
-                throw "Unexpected repository owner in API response: $fullName"
-            }
-
-            if ($parts[2] -ne 'false' -or -not $seen.Add($fullName)) {
-                continue
-            }
-
-            $repositories.Add([pscustomobject]@{
-                owner = [string]$target.owner
-                name = [string]$parts[1]
-                full_name = $fullName
-                fork = $parts[3] -eq 'true'
-                archived = $parts[4] -eq 'true'
-            })
+        $repositoryLists[$target.owner] =
+            [System.Collections.Generic.List[object]]::new()
+        $ownerNode = $data.($target.alias)
+        if ($null -eq $ownerNode -or
+            -not [string]::Equals(
+                [string]$ownerNode.login,
+                [string]$target.owner,
+                [System.StringComparison]::OrdinalIgnoreCase
+            )) {
+            throw "GitHub GraphQL did not return target $($target.owner)."
         }
 
-        $result[$target.owner] = @($repositories | Sort-Object full_name)
+        $connection = $ownerNode.repositories
+        Add-RepositoryNodes -Owner $target.owner `
+            -Nodes @($connection.nodes) -RepositoryLists $repositoryLists `
+            -Seen $seen -StarredSet $starredSet
+
+        $visitedCursors = [System.Collections.Generic.HashSet[string]]::new()
+        while ([bool]$connection.pageInfo.hasNextPage) {
+            $cursor = [string]$connection.pageInfo.endCursor
+            if ([string]::IsNullOrWhiteSpace($cursor) -or
+                -not $visitedCursors.Add($cursor)) {
+                throw "Invalid GraphQL pagination cursor for $($target.owner)."
+            }
+
+            $pageData = Invoke-GraphQlQuery -Query $ownerPageQuery `
+                -Variables ([ordered]@{
+                    login = [string]$target.owner
+                    endCursor = $cursor
+                })
+            $pageOwner = $pageData.repositoryOwner
+            if ($null -eq $pageOwner -or
+                -not [string]::Equals(
+                    [string]$pageOwner.login,
+                    [string]$target.owner,
+                    [System.StringComparison]::OrdinalIgnoreCase
+                )) {
+                throw "GitHub GraphQL pagination lost target $($target.owner)."
+            }
+
+            $connection = $pageOwner.repositories
+            Add-RepositoryNodes -Owner $target.owner `
+                -Nodes @($connection.nodes) -RepositoryLists $repositoryLists `
+                -Seen $seen -StarredSet $starredSet
+        }
     }
 
-    return ,$result
+    $discovery = [ordered]@{}
+    foreach ($target in $targets) {
+        $discovery[$target.owner] = @(
+            $repositoryLists[$target.owner] |
+                Sort-Object full_name
+        )
+    }
+
+    return [pscustomobject]@{
+        authenticated_login = $authenticatedLogin
+        discovery = $discovery
+        starred_set = $starredSet
+    }
 }
 
 function Get-AllRepositories {
@@ -158,27 +324,6 @@ function Get-AllRepositories {
         }
     }
     return @($repositories)
-}
-
-function Get-StarredSet {
-    $lines = @(Invoke-GhApiLines -Arguments @(
-        'user/starred?per_page=100',
-        '--paginate',
-        '--jq',
-        '.[].full_name',
-        '--header',
-        'Accept: application/vnd.github+json',
-        '--header',
-        "X-GitHub-Api-Version: $apiVersion"
-    ))
-
-    $set = [System.Collections.Generic.HashSet[string]]::new(
-        [System.StringComparer]::OrdinalIgnoreCase
-    )
-    foreach ($line in $lines) {
-        [void]$set.Add([string]$line)
-    }
-    return ,$set
 }
 
 function Invoke-StarRepository {
@@ -199,32 +344,47 @@ function Invoke-StarRepository {
     ))
 }
 
-function Format-NameList {
-    param([string[]]$Names)
+function Format-Integer {
+    param([int64]$Value)
 
-    if ($null -eq $Names -or $Names.Count -eq 0) {
-        return '无'
-    }
-    return (($Names | ForEach-Object { "``$_``" }) -join '、')
+    return [string]::Format(
+        [System.Globalization.CultureInfo]::InvariantCulture,
+        '{0:N0}',
+        $Value
+    )
 }
 
-function Write-AuthFailure {
+function Get-RankingStateLabel {
+    param([string]$State)
+
+    switch ($State) {
+        'newly_starred' { return '🆕 本次新增' }
+        'would_star' { return '🧭 待新增' }
+        'failed' { return '⚠️ 失败' }
+        default { return '✅ 原已 Star' }
+    }
+}
+
+function Write-TerminalFailure {
     param(
         [string]$Status,
         [string]$Message,
         [int]$ExitCode
     )
 
+    $markdown = "未执行：$Message`n未添加或移除任何 Star。"
     if ($OutputFormat -eq 'Json') {
         [ordered]@{
             schema_version = 1
             status = $Status
+            exit_code = $ExitCode
             dry_run = [bool]$DryRun
             detail = $Message
             writes_attempted = 0
+            markdown = $markdown
         } | ConvertTo-Json -Compress
     } else {
-        "未执行：$Message`n未添加或移除任何 Star。"
+        $markdown
     }
     exit $ExitCode
 }
@@ -247,6 +407,7 @@ function New-Report {
     $totalExisting = 0
     $totalWouldAdd = 0
     $totalFailed = 0
+    $totalStarsReceived = 0
 
     foreach ($target in $targets) {
         $owned = @($Discovery[$target.owner])
@@ -290,10 +451,13 @@ function New-Report {
                 })
             }
         }
+        $targetStarsReceived = [int64]($owned |
+            Measure-Object -Property star_count -Sum).Sum
 
         $targetReports.Add([pscustomobject]@{
             owner = [string]$target.owner
             public_count = $owned.Count
+            stars_received = $targetStarsReceived
             newly_starred = $added
             already_starred = $existing
             would_star = $wouldAdd
@@ -304,6 +468,43 @@ function New-Report {
         $totalExisting += $existing.Count
         $totalWouldAdd += $wouldAdd.Count
         $totalFailed += $failed.Count
+        $totalStarsReceived += $targetStarsReceived
+    }
+
+    $ranking = [System.Collections.Generic.List[object]]::new()
+    $rank = 0
+    foreach ($repository in @($allRepositories | Sort-Object `
+        @{ Expression = { [int64]$_.star_count }; Descending = $true }, `
+        @{ Expression = { ([string]$_.full_name).ToUpperInvariant() }; Descending = $false })) {
+        $rank++
+        $fullName = [string]$repository.full_name
+        $state = if ($FailureDetails.Contains($fullName)) {
+            'failed'
+        } elseif ($IsDryRun -and -not $StarredSet.Contains($fullName)) {
+            'would_star'
+        } elseif (-not $StarredSet.Contains($fullName)) {
+            'failed'
+        } elseif ($AddedSet.Contains($fullName)) {
+            'newly_starred'
+        } else {
+            'already_starred'
+        }
+        $badge = switch ($rank) {
+            1 { '🥇' }
+            2 { '🥈' }
+            3 { '🥉' }
+            default { "#$rank" }
+        }
+        $ranking.Add([pscustomobject][ordered]@{
+            rank = $rank
+            badge = $badge
+            owner = [string]$repository.owner
+            repository = [string]$repository.name
+            full_name = $fullName
+            url = "https://github.com/$fullName"
+            star_count = [int64]$repository.star_count
+            state = $state
+        })
     }
 
     return [pscustomobject][ordered]@{
@@ -318,12 +519,14 @@ function New-Report {
             already_starred = $totalExisting
             would_star = $totalWouldAdd
             failed = $totalFailed
+            stars_received = $totalStarsReceived
             verified_starred = @(
                 $allRepositories |
                     Where-Object { $StarredSet.Contains([string]$_.full_name) }
             ).Count
         }
         targets = @($targetReports)
+        ranking = @($ranking)
         api = [pscustomobject][ordered]@{
             version = $apiVersion
             calls = $script:apiCallCount
@@ -338,56 +541,86 @@ function Convert-ReportToMarkdown {
     param([Parameter(Mandatory = $true)]$Report)
 
     $lines = [System.Collections.Generic.List[string]]::new()
-    if ($Report.dry_run) {
-        $lines.Add(
-            "Dry Run 已完成：发现 $($Report.totals.public_repositories) 个公开仓库；" +
-            "待新增 $($Report.totals.would_star) 个，原本已 Star $($Report.totals.already_starred) 个。"
-        )
-        $lines.Add('本次未发送任何 Star 写入请求。')
+    $heading = if ($Report.dry_run) {
+        '🧭 Dry Run'
     } elseif ($Report.status -eq 'complete') {
-        $lines.Add(
-            "已完成并复核：两个目标下共 $($Report.totals.public_repositories) 个公开仓库全部显示为已 Star。"
-        )
-        $lines.Add(
-            "本次新增 $($Report.totals.newly_starred) 个，原本已 Star $($Report.totals.already_starred) 个，失败 0 个。"
-        )
+        '✅ 已完成'
     } else {
+        '⚠️ 部分完成'
+    }
+    $changeCount = if ($Report.dry_run) {
+        $Report.totals.would_star
+    } else {
+        $Report.totals.newly_starred
+    }
+    $changeLabel = if ($Report.dry_run) { '待新增' } else { '新增' }
+
+    $lines.Add('# ⭐ 万哥牛逼｜执行报告')
+    $lines.Add('')
+    $lines.Add(
+        "> $heading · $($Report.totals.verified_starred)/" +
+        "$($Report.totals.public_repositories) 已 Star · " +
+        "$changeLabel $changeCount · ⭐ 项目累计 Stars " +
+        (Format-Integer ([int64]$Report.totals.stars_received))
+    )
+    $lines.Add('>')
+    $lines.Add(
+        "> 执行账号：``$($Report.authenticated_account)`` · " +
+        "API 调用：$($Report.api.calls)"
+    )
+
+    $lines.Add('')
+    $lines.Add('## 项目总榜')
+    $lines.Add('')
+    $lines.Add('| 排名 | 项目 | 作者 | 当前 Stars | 状态 |')
+    $lines.Add('| ---: | --- | --- | ---: | --- |')
+    foreach ($row in @($Report.ranking)) {
+        $project = "[$($row.repository)]($($row.url))"
+        if ([int]$row.rank -le 3) {
+            $project = "**$project**"
+        }
         $lines.Add(
-            "部分完成：检查 $($Report.totals.public_repositories) 个公开仓库，" +
-            "最终验证 $($Report.totals.verified_starred) 个已 Star，" +
-            "仓库失败 $($Report.totals.failed) 个，全局错误 $($Report.global_errors.Count) 个。"
+            "| $($row.badge) | $project | $($row.owner) | " +
+            "⭐ $(Format-Integer ([int64]$row.star_count)) | " +
+            "$(Get-RankingStateLabel ([string]$row.state)) |"
         )
     }
 
-    $lines.Add("执行账号：``$($Report.authenticated_account)``")
+    $ownerChangeHeader = if ($Report.dry_run) { '待新增' } else { '本次新增' }
+    $lines.Add('')
+    $lines.Add('## 作者概览')
+    $lines.Add('')
+    $lines.Add(
+        "| 作者 | 公开仓库 | 项目累计 Stars | $ownerChangeHeader | 失败 |"
+    )
+    $lines.Add('| --- | ---: | ---: | ---: | ---: |')
     foreach ($targetReport in $Report.targets) {
-        $owner = [string]$targetReport.owner
-        $lines.Add('')
-        $lines.Add("### [$owner](https://github.com/$owner)")
-        $lines.Add('')
-        $lines.Add("公开仓库：$($targetReport.public_count) 个")
-        if ($Report.dry_run) {
-            $lines.Add("待新增：$(Format-NameList @($targetReport.would_star))")
+        $ownerChangeCount = if ($Report.dry_run) {
+            $targetReport.would_star.Count
         } else {
-            $lines.Add("本次新增：$(Format-NameList @($targetReport.newly_starred))")
+            $targetReport.newly_starred.Count
         }
-        $lines.Add("原本已 Star：$(Format-NameList @($targetReport.already_starred))")
-
-        if ($targetReport.failed.Count -gt 0) {
-            $lines.Add('失败：')
-            foreach ($failure in $targetReport.failed) {
-                $lines.Add("- ``$($failure.repository)``：$($failure.detail)")
-            }
-        } else {
-            $lines.Add('失败：无')
-        }
+        $lines.Add(
+            "| $($targetReport.owner) | $($targetReport.public_count) | " +
+            "$(Format-Integer ([int64]$targetReport.stars_received)) | " +
+            "$ownerChangeCount | $($targetReport.failed.Count) |"
+        )
     }
 
-    if ($Report.global_errors.Count -gt 0) {
+    $repositoryFailures = @(
+        $Report.targets |
+            ForEach-Object { @($_.failed) }
+    )
+    if ($repositoryFailures.Count -gt 0 -or
+        $Report.global_errors.Count -gt 0) {
         $lines.Add('')
-        $lines.Add('全局错误：')
-        foreach ($globalError in $Report.global_errors) {
-            $lines.Add("- $globalError")
+        $lines.Add('## ⚠️ 失败详情')
+        $lines.Add('')
+        foreach ($failure in $repositoryFailures) {
+            $lines.Add("- ``$($failure.repository)``：$($failure.detail)")
+        }
+        foreach ($globalError in @($Report.global_errors)) {
+            $lines.Add("- 全局：$globalError")
         }
     }
 
@@ -396,69 +629,91 @@ function Convert-ReportToMarkdown {
     return $lines -join [Environment]::NewLine
 }
 
-$authScript = Join-Path $PSScriptRoot 'check-gh-auth.ps1'
-if (-not (Test-Path -LiteralPath $authScript -PathType Leaf)) {
-    Write-AuthFailure -Status 'cli_unavailable' `
-        -Message '认证探针脚本不存在。' -ExitCode 10
-}
+function Write-ReportOutput {
+    param(
+        [Parameter(Mandatory = $true)]$Report,
+        [int]$ExitCode = 0
+    )
 
-try {
-    $authRaw = & $authScript -Hostname $hostname -GhPath $GhPath
-    $auth = ($authRaw -join [Environment]::NewLine) | ConvertFrom-Json
-} catch {
-    Write-AuthFailure -Status 'credential_unavailable' `
-        -Message (Protect-Text $_.Exception.Message) -ExitCode 10
-}
+    $markdown = Convert-ReportToMarkdown $Report
+    if ($OutputFormat -eq 'Json') {
+        $Report | Add-Member -NotePropertyName exit_code `
+            -NotePropertyValue $ExitCode
+        $Report | Add-Member -NotePropertyName markdown `
+            -NotePropertyValue $markdown
+        $Report | ConvertTo-Json -Depth 8 -Compress
+    } else {
+        $markdown
+    }
 
-switch ([string]$auth.classification) {
-    'auth_valid' {
-        $script:resolvedGhPath = [string]$auth.gh_path
-    }
-    'credential_rejected' {
-        Write-AuthFailure -Status 'credential_rejected' `
-            -Message 'GitHub 能看到凭据，但拒绝了认证请求。' -ExitCode 11
-    }
-    default {
-        Write-AuthFailure -Status 'credential_unavailable' `
-            -Message '当前执行上下文无法使用 GitHub CLI 凭据；请在正常用户上下文复核。' `
-            -ExitCode 10
+    if ($ExitCode -ne 0) {
+        exit $ExitCode
     }
 }
 
+if ([string]::IsNullOrWhiteSpace($GhPath)) {
+    $ghCommand = Get-Command gh -ErrorAction SilentlyContinue
+    if ($null -ne $ghCommand) {
+        $GhPath = $ghCommand.Source
+    } else {
+        $windowsCandidate = Join-Path $env:ProgramFiles 'GitHub CLI\gh.exe'
+        if (Test-Path -LiteralPath $windowsCandidate -PathType Leaf) {
+            $GhPath = $windowsCandidate
+        }
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($GhPath) -or
+    -not (Test-Path -LiteralPath $GhPath -PathType Leaf)) {
+    Write-TerminalFailure -Status 'cli_unavailable' `
+        -Message '未找到 GitHub CLI。' -ExitCode 10
+}
+
+$script:resolvedGhPath = (Resolve-Path -LiteralPath $GhPath).Path
 $addedSet = [System.Collections.Generic.HashSet[string]]::new(
     [System.StringComparer]::OrdinalIgnoreCase
 )
 $failureDetails = [ordered]@{}
 
 try {
-    $initialDiscovery = Get-TargetRepositories
-    $baselineStarred = Get-StarredSet
+    $initialState = Get-GitHubState
 } catch {
     $message = Protect-Text $_.Exception.Message
-    if ($OutputFormat -eq 'Json') {
-        [ordered]@{
-            schema_version = 1
-            status = 'discovery_failed'
-            dry_run = [bool]$DryRun
-            detail = $message
-            writes_attempted = $script:putAttemptCount
-        } | ConvertTo-Json -Compress
-    } else {
-        "未完成：实时仓库或 Star 状态发现失败。`n原因：$message`n未执行 Unstar。"
+    if ($message -match '(?i)HTTP\s+401\b|bad credentials|authentication failed|requires authentication') {
+        Write-TerminalFailure -Status 'credential_rejected' `
+            -Message 'GitHub 拒绝了当前凭据。' -ExitCode 11
     }
-    exit 20
+    if ($message -match '(?i)not logged (?:in|into)|gh auth login|authentication token is missing') {
+        Write-TerminalFailure -Status 'credential_unavailable' `
+            -Message '正常用户上下文中没有可用的 GitHub CLI 凭据。' -ExitCode 10
+    }
+    Write-TerminalFailure -Status 'discovery_failed' `
+        -Message "实时仓库或 Star 状态发现失败：$message" -ExitCode 20
 }
+
+$authenticatedLogin = [string]$initialState.authenticated_login
+$initialDiscovery = $initialState.discovery
+$baselineStarred = $initialState.starred_set
 
 if ($DryRun) {
     $report = New-Report -Status 'dry_run' -Discovery $initialDiscovery `
         -StarredSet $baselineStarred -AddedSet $addedSet `
         -FailureDetails $failureDetails -IsDryRun $true `
-        -AuthenticatedLogin ([string]$auth.authenticated_login)
-    if ($OutputFormat -eq 'Json') {
-        $report | ConvertTo-Json -Depth 8 -Compress
-    } else {
-        Convert-ReportToMarkdown $report
-    }
+        -AuthenticatedLogin $authenticatedLogin
+    Write-ReportOutput -Report $report
+    return
+}
+
+$initialMissing = @(
+    Get-AllRepositories -Discovery $initialDiscovery |
+        Where-Object { -not $baselineStarred.Contains([string]$_.full_name) }
+)
+if ($initialMissing.Count -eq 0) {
+    $report = New-Report -Status 'complete' -Discovery $initialDiscovery `
+        -StarredSet $baselineStarred -AddedSet $addedSet `
+        -FailureDetails $failureDetails -IsDryRun $false `
+        -AuthenticatedLogin $authenticatedLogin
+    Write-ReportOutput -Report $report
     return
 }
 
@@ -476,52 +731,21 @@ for ($round = 1; $round -le 2; $round++) {
     )
 
     if ($missing.Count -gt 0) {
-        for ($offset = 0; $offset -lt $missing.Count; $offset += $BatchSize) {
-            $last = [Math]::Min($offset + $BatchSize - 1, $missing.Count - 1)
-            $batch = @($missing[$offset..$last])
-            $attempted = [System.Collections.Generic.List[object]]::new()
-
-            foreach ($repository in $batch) {
-                try {
-                    Invoke-StarRepository -Repository $repository
-                    [void]$addedSet.Add([string]$repository.full_name)
-                    $attempted.Add($repository)
-                } catch {
-                    $failureDetails[[string]$repository.full_name] =
-                        Protect-Text $_.Exception.Message
-                }
-            }
-
-            if ($attempted.Count -eq 0) {
-                continue
-            }
-
+        foreach ($repository in $missing) {
             try {
-                $batchStarred = Get-StarredSet
-                $workingStarred = $batchStarred
-                foreach ($repository in $attempted) {
-                    if ($batchStarred.Contains([string]$repository.full_name)) {
-                        [void]$failureDetails.Remove([string]$repository.full_name)
-                    } else {
-                        $failureDetails[[string]$repository.full_name] =
-                            'PUT succeeded, but the batch verification did not find the Star.'
-                    }
-                }
+                Invoke-StarRepository -Repository $repository
+                [void]$addedSet.Add([string]$repository.full_name)
             } catch {
-                $verificationError = Protect-Text $_.Exception.Message
-                foreach ($repository in $attempted) {
-                    $failureDetails[[string]$repository.full_name] =
-                        "Batch verification failed: $verificationError"
-                }
+                $failureDetails[[string]$repository.full_name] =
+                    Protect-Text $_.Exception.Message
             }
         }
     }
 
     try {
-        $verifiedDiscovery = Get-TargetRepositories
-        $verifiedStarred = Get-StarredSet
-        $finalDiscovery = $verifiedDiscovery
-        $finalStarred = $verifiedStarred
+        $verifiedState = Get-GitHubState
+        $finalDiscovery = $verifiedState.discovery
+        $finalStarred = $verifiedState.starred_set
     } catch {
         $globalErrors.Add(
             "Full-scope verification failed: $(Protect-Text $_.Exception.Message)"
@@ -554,15 +778,8 @@ $status = if ($verificationSucceeded) { 'complete' } else { 'partial' }
 $report = New-Report -Status $status -Discovery $finalDiscovery `
     -StarredSet $finalStarred -AddedSet $addedSet `
     -FailureDetails $failureDetails -IsDryRun $false `
-    -AuthenticatedLogin ([string]$auth.authenticated_login) `
+    -AuthenticatedLogin $authenticatedLogin `
     -GlobalErrors @($globalErrors)
 
-if ($OutputFormat -eq 'Json') {
-    $report | ConvertTo-Json -Depth 8 -Compress
-} else {
-    Convert-ReportToMarkdown $report
-}
-
-if ($status -ne 'complete') {
-    exit 30
-}
+$reportExitCode = if ($status -eq 'complete') { 0 } else { 30 }
+Write-ReportOutput -Report $report -ExitCode $reportExitCode
