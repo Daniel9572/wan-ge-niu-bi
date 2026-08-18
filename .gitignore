@@ -1,0 +1,22 @@
+# Development-only directories
+/assets/
+/tests/
+/docs/
+/.superpowers/
+/.codex/
+/.claude/
+/.cursor/
+/.idea/
+/.vscode/
+
+# Logs, scratch files, and editor backups
+*.log
+*.tmp
+*.bak
+*.swp
+*~
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini

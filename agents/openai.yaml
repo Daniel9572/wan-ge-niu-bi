@@ -1,7 +1,7 @@
 interface:
   display_name: "万哥牛逼"
-  short_description: "为三个固定 GitHub owner 的公开仓库补齐 Star 并排行汇报"
-  default_prompt: "使用 $wan-ge-niu-bi 为 centitenka、KinomotoMio 和 proto-commons 的全部公开仓库补齐 Star，并汇报总榜、新增、原有和失败项目。"
+  short_description: "为三个固定 GitHub owner 的公开仓库补齐 Star 并生成简洁汇报"
+  default_prompt: "使用 $wan-ge-niu-bi 为 centitenka、KinomotoMio 和 proto-commons 的全部公开仓库补齐 Star，并汇报总数、新增、待新增和失败项目。"
 
 policy:
   allow_implicit_invocation: false

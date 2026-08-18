@@ -46,7 +46,7 @@ query WanGeNiuBiState(
       ownerAffiliations: [OWNER]
       orderBy: { field: NAME, direction: ASC }
     ) {
-      nodes { id name nameWithOwner isPrivate viewerHasStarred stargazerCount }
+      nodes { id name nameWithOwner isPrivate viewerHasStarred }
       pageInfo { hasNextPage endCursor }
     }
   }
@@ -58,7 +58,7 @@ query WanGeNiuBiState(
       ownerAffiliations: [OWNER]
       orderBy: { field: NAME, direction: ASC }
     ) {
-      nodes { id name nameWithOwner isPrivate viewerHasStarred stargazerCount }
+      nodes { id name nameWithOwner isPrivate viewerHasStarred }
       pageInfo { hasNextPage endCursor }
     }
   }
@@ -70,7 +70,7 @@ query WanGeNiuBiState(
       ownerAffiliations: [OWNER]
       orderBy: { field: NAME, direction: ASC }
     ) {
-      nodes { id name nameWithOwner isPrivate viewerHasStarred stargazerCount }
+      nodes { id name nameWithOwner isPrivate viewerHasStarred }
       pageInfo { hasNextPage endCursor }
     }
   }
@@ -88,7 +88,7 @@ query WanGeNiuBiOwnerPage($login: String!, $endCursor: String) {
       ownerAffiliations: [OWNER]
       orderBy: { field: NAME, direction: ASC }
     ) {
-      nodes { id name nameWithOwner isPrivate viewerHasStarred stargazerCount }
+      nodes { id name nameWithOwner isPrivate viewerHasStarred }
       pageInfo { hasNextPage endCursor }
     }
   }
@@ -241,7 +241,6 @@ function Add-RepositoryNodes {
             owner = $Owner
             name = [string]$node.name
             full_name = $fullName
-            star_count = [int64]$node.stargazerCount
         })
         if ([bool]$node.viewerHasStarred) {
             [void]$StarredSet.Add($fullName)
@@ -362,27 +361,6 @@ function Invoke-StarRepository {
     ))
 }
 
-function Format-Integer {
-    param([int64]$Value)
-
-    return [string]::Format(
-        [System.Globalization.CultureInfo]::InvariantCulture,
-        '{0:N0}',
-        $Value
-    )
-}
-
-function Get-RankingStateLabel {
-    param([string]$State)
-
-    switch ($State) {
-        'newly_starred' { return '🆕 本次新增' }
-        'would_star' { return '🧭 待新增' }
-        'failed' { return '⚠️ 失败' }
-        default { return '✅ 原已 Star' }
-    }
-}
-
 function Write-TerminalFailure {
     param(
         [string]$Status,
@@ -420,110 +398,77 @@ function New-Report {
     )
 
     $allRepositories = @(Get-AllRepositories -Discovery $Discovery)
-    $targetReports = [System.Collections.Generic.List[object]]::new()
-    $totalAdded = 0
-    $totalExisting = 0
-    $totalWouldAdd = 0
-    $totalFailed = 0
-    $totalStarsReceived = 0
+    $newlyStarred = @(
+        $allRepositories |
+            Where-Object {
+                $StarredSet.Contains([string]$_.full_name) -and
+                $AddedSet.Contains([string]$_.full_name)
+            } |
+            ForEach-Object { [string]$_.full_name } |
+            Sort-Object
+    )
+    $wouldStar = @(
+        $allRepositories |
+            Where-Object {
+                $IsDryRun -and -not $StarredSet.Contains([string]$_.full_name)
+            } |
+            ForEach-Object { [string]$_.full_name } |
+            Sort-Object
+    )
+    $failed = [System.Collections.Generic.List[object]]::new()
+    if (-not $IsDryRun) {
+        foreach ($repository in $allRepositories) {
+            $fullName = [string]$repository.full_name
+            if ($StarredSet.Contains($fullName)) {
+                continue
+            }
+            $detail = if ($FailureDetails.Contains($fullName)) {
+                [string]$FailureDetails[$fullName]
+            } else {
+                'Final verification did not confirm this Star.'
+            }
+            $failed.Add([pscustomobject][ordered]@{
+                repository = $fullName
+                detail = Protect-Text $detail
+            })
+        }
+    }
 
+    $ownerSummaries = [System.Collections.Generic.List[object]]::new()
     foreach ($target in $targets) {
         $owned = @($Discovery[$target.owner])
-        $added = @(
+        $verifiedCount = @(
             $owned |
-                Where-Object {
-                    $StarredSet.Contains([string]$_.full_name) -and
-                    $AddedSet.Contains([string]$_.full_name)
-                } |
-                ForEach-Object { [string]$_.name } |
-                Sort-Object
-        )
-        $wouldAdd = @(
-            $owned |
-                Where-Object {
-                    $IsDryRun -and -not $StarredSet.Contains([string]$_.full_name)
-                } |
-                ForEach-Object { [string]$_.name } |
-                Sort-Object
-        )
-        $existing = @(
-            $owned |
-                Where-Object {
-                    $StarredSet.Contains([string]$_.full_name) -and
-                    -not $AddedSet.Contains([string]$_.full_name)
-                } |
-                ForEach-Object { [string]$_.name } |
-                Sort-Object
-        )
-        $failed = [System.Collections.Generic.List[object]]::new()
-        foreach ($repository in $owned) {
-            if (-not $StarredSet.Contains([string]$repository.full_name) -and -not $IsDryRun) {
-                $detail = if ($FailureDetails.Contains([string]$repository.full_name)) {
-                    [string]$FailureDetails[[string]$repository.full_name]
-                } else {
-                    'Final verification did not find this repository in the authenticated user Star list.'
-                }
-                $failed.Add([pscustomobject]@{
-                    repository = [string]$repository.name
-                    detail = Protect-Text $detail
-                })
-            }
-        }
-        $targetStarsReceived = [int64]($owned |
-            Measure-Object -Property star_count -Sum).Sum
-
-        $targetReports.Add([pscustomobject]@{
-            owner = [string]$target.owner
-            public_count = $owned.Count
-            stars_received = $targetStarsReceived
-            newly_starred = $added
-            already_starred = $existing
-            would_star = $wouldAdd
-            failed = @($failed)
-        })
-
-        $totalAdded += $added.Count
-        $totalExisting += $existing.Count
-        $totalWouldAdd += $wouldAdd.Count
-        $totalFailed += $failed.Count
-        $totalStarsReceived += $targetStarsReceived
-    }
-
-    $ranking = [System.Collections.Generic.List[object]]::new()
-    $rank = 0
-    foreach ($repository in @($allRepositories | Sort-Object `
-        @{ Expression = { [int64]$_.star_count }; Descending = $true }, `
-        @{ Expression = { ([string]$_.full_name).ToUpperInvariant() }; Descending = $false })) {
-        $rank++
-        $fullName = [string]$repository.full_name
-        $state = if ($FailureDetails.Contains($fullName)) {
-            'failed'
-        } elseif ($IsDryRun -and -not $StarredSet.Contains($fullName)) {
-            'would_star'
-        } elseif (-not $StarredSet.Contains($fullName)) {
-            'failed'
-        } elseif ($AddedSet.Contains($fullName)) {
-            'newly_starred'
+                Where-Object { $StarredSet.Contains([string]$_.full_name) }
+        ).Count
+        $changeCount = if ($IsDryRun) {
+            @(
+                $owned |
+                    Where-Object { -not $StarredSet.Contains([string]$_.full_name) }
+            ).Count
         } else {
-            'already_starred'
+            @(
+                $owned |
+                    Where-Object {
+                        $StarredSet.Contains([string]$_.full_name) -and
+                        $AddedSet.Contains([string]$_.full_name)
+                    }
+            ).Count
         }
-        $badge = switch ($rank) {
-            1 { '🥇' }
-            2 { '🥈' }
-            3 { '🥉' }
-            default { "#$rank" }
-        }
-        $ranking.Add([pscustomobject][ordered]@{
-            rank = $rank
-            badge = $badge
-            owner = [string]$repository.owner
-            repository = [string]$repository.name
-            full_name = $fullName
-            url = "https://github.com/$fullName"
-            star_count = [int64]$repository.star_count
-            state = $state
+        $ownerFailed = if ($IsDryRun) { 0 } else { $owned.Count - $verifiedCount }
+        $ownerSummaries.Add([pscustomobject][ordered]@{
+            owner = [string]$target.owner
+            public_repositories = $owned.Count
+            verified_starred = $verifiedCount
+            changed = $changeCount
+            failed = $ownerFailed
         })
     }
+
+    $verifiedTotal = @(
+        $allRepositories |
+            Where-Object { $StarredSet.Contains([string]$_.full_name) }
+    ).Count
 
     return [pscustomobject][ordered]@{
         schema_version = 1
@@ -533,18 +478,16 @@ function New-Report {
         fixed_targets = @($targets | ForEach-Object { [string]$_.owner })
         totals = [pscustomobject][ordered]@{
             public_repositories = $allRepositories.Count
-            newly_starred = $totalAdded
-            already_starred = $totalExisting
-            would_star = $totalWouldAdd
-            failed = $totalFailed
-            stars_received = $totalStarsReceived
-            verified_starred = @(
-                $allRepositories |
-                    Where-Object { $StarredSet.Contains([string]$_.full_name) }
-            ).Count
+            verified_starred = $verifiedTotal
+            newly_starred = $newlyStarred.Count
+            already_starred = $verifiedTotal - $newlyStarred.Count
+            would_star = $wouldStar.Count
+            failed = $failed.Count
         }
-        targets = @($targetReports)
-        ranking = @($ranking)
+        owners = @($ownerSummaries)
+        newly_starred = $newlyStarred
+        would_star = $wouldStar
+        failed = @($failed)
         api = [pscustomobject][ordered]@{
             version = $apiVersion
             calls = $script:apiCallCount
@@ -578,8 +521,7 @@ function Convert-ReportToMarkdown {
     $lines.Add(
         "> $heading · $($Report.totals.verified_starred)/" +
         "$($Report.totals.public_repositories) 已 Star · " +
-        "$changeLabel $changeCount · ⭐ 项目累计 Stars " +
-        (Format-Integer ([int64]$Report.totals.stars_received))
+        "$changeLabel $changeCount"
     )
     $lines.Add('>')
     $lines.Add(
@@ -587,54 +529,44 @@ function Convert-ReportToMarkdown {
         "API 调用：$($Report.api.calls)"
     )
 
-    $lines.Add('')
-    $lines.Add('## 项目总榜')
-    $lines.Add('')
-    $lines.Add('| 排名 | 项目 | 作者 | 当前 Stars | 状态 |')
-    $lines.Add('| ---: | --- | --- | ---: | --- |')
-    foreach ($row in @($Report.ranking)) {
-        $project = "[$($row.repository)]($($row.url))"
-        if ([int]$row.rank -le 3) {
-            $project = "**$project**"
-        }
-        $lines.Add(
-            "| $($row.badge) | $project | $($row.owner) | " +
-            "⭐ $(Format-Integer ([int64]$row.star_count)) | " +
-            "$(Get-RankingStateLabel ([string]$row.state)) |"
-        )
-    }
-
     $ownerChangeHeader = if ($Report.dry_run) { '待新增' } else { '本次新增' }
     $lines.Add('')
     $lines.Add('## 作者概览')
     $lines.Add('')
     $lines.Add(
-        "| 作者 | 公开仓库 | 项目累计 Stars | $ownerChangeHeader | 失败 |"
+        "| 作者 | 公开仓库 | 已 Star | $ownerChangeHeader | 失败 |"
     )
     $lines.Add('| --- | ---: | ---: | ---: | ---: |')
-    foreach ($targetReport in $Report.targets) {
-        $ownerChangeCount = if ($Report.dry_run) {
-            $targetReport.would_star.Count
-        } else {
-            $targetReport.newly_starred.Count
-        }
+    foreach ($owner in $Report.owners) {
         $lines.Add(
-            "| $($targetReport.owner) | $($targetReport.public_count) | " +
-            "$(Format-Integer ([int64]$targetReport.stars_received)) | " +
-            "$ownerChangeCount | $($targetReport.failed.Count) |"
+            "| $($owner.owner) | $($owner.public_repositories) | " +
+            "$($owner.verified_starred) | $($owner.changed) | $($owner.failed) |"
         )
     }
 
-    $repositoryFailures = @(
-        $Report.targets |
-            ForEach-Object { @($_.failed) }
+    $changeItems = @(
+        if ($Report.dry_run) {
+            $Report.would_star
+        } else {
+            $Report.newly_starred
+        }
     )
-    if ($repositoryFailures.Count -gt 0 -or
-        $Report.global_errors.Count -gt 0) {
+    if ($changeItems.Count -gt 0) {
+        $lines.Add('')
+        $changeHeading = if ($Report.dry_run) { '## 待新增' } else { '## 本次新增' }
+        $lines.Add($changeHeading)
+        $lines.Add('')
+        foreach ($fullName in $changeItems) {
+            $lines.Add("- ``$fullName``")
+        }
+    }
+
+    if (@($Report.failed).Count -gt 0 -or
+        @($Report.global_errors).Count -gt 0) {
         $lines.Add('')
         $lines.Add('## ⚠️ 失败详情')
         $lines.Add('')
-        foreach ($failure in $repositoryFailures) {
+        foreach ($failure in $Report.failed) {
             $lines.Add("- ``$($failure.repository)``：$($failure.detail)")
         }
         foreach ($globalError in @($Report.global_errors)) {

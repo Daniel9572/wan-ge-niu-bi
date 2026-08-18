@@ -1,6 +1,6 @@
 ---
 name: wan-ge-niu-bi
-description: Deterministically star every public GitHub repository currently owned by centitenka, KinomotoMio, and proto-commons with the bundled GitHub CLI scripts, then return a verified Chinese report. Use only when the user explicitly invokes $wan-ge-niu-bi; never invoke it implicitly from ordinary GitHub, repository, author, or Star requests.
+description: Use when the user explicitly invokes $wan-ge-niu-bi to add missing Stars for the fixed public GitHub owners; never use for ordinary GitHub, repository, author, or Star requests.
 ---
 
 # 万哥牛逼
@@ -11,10 +11,11 @@ as authorization to add Stars only to public repositories currently owned by
 
 ## Execute
 
-1. Make the first GitHub operation a single run of
-   `scripts/invoke-wan-ge-niu-bi.ps1 -OutputFormat Json` in the normal user
-   context, requesting host approval if required. State in the approval request
-   that the command may add Stars to the fixed targets' public repositories and
+1. Select exactly one platform entrypoint before any GitHub operation:
+   - Windows: `scripts/invoke-wan-ge-niu-bi.ps1 -OutputFormat Json`
+   - Unix: `bash scripts/invoke-wan-ge-niu-bi.sh --output-format json`
+   Run it once in the normal user context, requesting host approval if required.
+   State that it may add Stars to the fixed targets' public repositories and
    never removes Stars.
 2. Parse the single JSON object and use its `status` field as authoritative even
    if the host normalizes nonzero process exit codes. Return its `markdown` field
@@ -33,9 +34,9 @@ as authorization to add Stars only to public repositories currently owned by
 - Keep the fixed targets inside the script; never pass or substitute other owners.
 - Discover live public repositories on every run, including forks and archived
   repositories. Do not query or modify private repositories.
-- Never remove a Star. The bundled implementation contains no unstar operation.
+- Never remove a Star. Neither bundled implementation contains an unstar operation.
 - Never print a token, use `gh auth status --show-token`, expose token environment
   variables, or dump an unsanitized credential file.
-- Use `-DryRun -OutputFormat Json` only for diagnostics or validation; it performs
-  no Star writes.
+- For diagnostics, use `-DryRun -OutputFormat Json` on Windows or
+  `--dry-run --output-format json` on Unix; neither performs Star writes.
 - Read or modify the bundled scripts only when debugging or updating this Skill.

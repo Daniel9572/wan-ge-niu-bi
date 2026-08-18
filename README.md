@@ -2,96 +2,41 @@
 
 [English](README.en.md) | [简体中文](README.md)
 
-一个仅在用户显式调用 `$wan-ge-niu-bi` 时运行的 Codex Skill：使用内置 GitHub CLI 脚本，为 `centitenka`、`KinomotoMio` 与 `proto-commons` 当前拥有的所有公开仓库补充 Star，并返回可核验的中文结果报告。
+一个仅在用户显式调用 `$wan-ge-niu-bi` 时运行的 Codex Skill。它使用 GitHub CLI，为 `centitenka`、`KinomotoMio` 与 `proto-commons` 当前拥有的全部公开仓库补齐 Star，并返回简洁、可核验的中文报告。
 
-## 执行耗时
+## 平台支持
 
-常见路径通常预计在 **2–4 秒**内完成：一次 GraphQL 查询同时取得账号、三方的公开仓库、当前 Stars 与 `viewerHasStarred`。这不是 SLA；网络延迟、GitHub API 重试、任一方超过 100 个仓库后的分页，以及实际需要补 Star 的仓库数量都会增加耗时。
+| 平台 | 入口 | 依赖 |
+| --- | --- | --- |
+| Windows | `scripts/invoke-wan-ge-niu-bi.ps1` | PowerShell 5.1+、GitHub CLI |
+| Linux / macOS | `scripts/invoke-wan-ge-niu-bi.sh` | Bash 3.2+、GitHub CLI |
 
-| 实测指标 | 2026-08-17 真实 Dry Run |
-| --- | ---: |
-| 环境 | Windows · PowerShell 7 |
-| 耗时 | **2.33 秒** |
-| 公开仓库 | 44 |
-| 已 Star | 44/44 |
-| 项目累计 Stars | 129 |
-| GraphQL API 调用 | 1 |
-| PUT 尝试 | 0 |
+Unix 版本不依赖 Python、独立 `jq`、Node.js 或 PowerShell。两个入口都使用 `gh` 当前账号的正常用户凭据。
 
-## 项目总榜
+## 只读验证
 
-以下排名来自 2026-08-17 的真实只读 Dry Run。仓库数量与 Stars 会随 GitHub 实时状态变化；Top 10 直接展示，其余项目可按需展开。
+```powershell
+pwsh -NoProfile -File scripts/invoke-wan-ge-niu-bi.ps1 -DryRun -OutputFormat Json
+```
 
-| 排名 | 项目 | 作者 | 当前 Stars | 状态 |
-| ---: | --- | --- | ---: | --- |
-| 🥇 | **[ai-dokkai](https://github.com/KinomotoMio/ai-dokkai)** | KinomotoMio | ⭐ 14 | ✅ 原已 Star |
-| 🥈 | **[cc-persona](https://github.com/proto-commons/cc-persona)** | proto-commons | ⭐ 10 | ✅ 原已 Star |
-| 🥉 | **[Moodiary](https://github.com/KinomotoMio/Moodiary)** | KinomotoMio | ⭐ 8 | ✅ 原已 Star |
-| #4 | [ZhiYan-Legacy](https://github.com/proto-commons/ZhiYan-Legacy) | proto-commons | ⭐ 7 | ✅ 原已 Star |
-| #5 | [issue-creator](https://github.com/centitenka/issue-creator) | centitenka | ⭐ 4 | ✅ 原已 Star |
-| #6 | [issue-to-pr](https://github.com/centitenka/issue-to-pr) | centitenka | ⭐ 4 | ✅ 原已 Star |
-| #7 | [conda2uv](https://github.com/KinomotoMio/conda2uv) | KinomotoMio | ⭐ 4 | ✅ 原已 Star |
-| #8 | [MCPSecTrace](https://github.com/KinomotoMio/MCPSecTrace) | KinomotoMio | ⭐ 4 | ✅ 原已 Star |
-| #9 | [KinomotoMio](https://github.com/KinomotoMio/KinomotoMio) | KinomotoMio | ⭐ 3 | ✅ 原已 Star |
-| #10 | [resumaker](https://github.com/KinomotoMio/resumaker) | KinomotoMio | ⭐ 3 | ✅ 原已 Star |
+```bash
+bash scripts/invoke-wan-ge-niu-bi.sh --dry-run --output-format json
+```
 
-<details>
-<summary><strong>查看第 11–44 名</strong></summary>
+Dry Run 会重新发现全部目标公开仓库并核对 Star 状态，但不会发起任何 PUT。移除 Dry Run 参数后，脚本只为缺失项目添加 Star。
 
-| 排名 | 项目 | 作者 | 当前 Stars | 状态 |
-| ---: | --- | --- | ---: | --- |
-| #11 | [zotero-agent-copilot](https://github.com/KinomotoMio/zotero-agent-copilot) | KinomotoMio | ⭐ 3 | ✅ 原已 Star |
-| #12 | [Browser-bg-swap](https://github.com/proto-commons/Browser-bg-swap) | proto-commons | ⭐ 3 | ✅ 原已 Star |
-| #13 | [TV_Caster](https://github.com/proto-commons/TV_Caster) | proto-commons | ⭐ 3 | ✅ 原已 Star |
-| #14 | [ai-review-resolver](https://github.com/centitenka/ai-review-resolver) | centitenka | ⭐ 2 | ✅ 原已 Star |
-| #15 | [ai-reviewer](https://github.com/centitenka/ai-reviewer) | centitenka | ⭐ 2 | ✅ 原已 Star |
-| #16 | [atomic-commits](https://github.com/centitenka/atomic-commits) | centitenka | ⭐ 2 | ✅ 原已 Star |
-| #17 | [code-simplifier](https://github.com/centitenka/code-simplifier) | centitenka | ⭐ 2 | ✅ 原已 Star |
-| #18 | [comments-clean](https://github.com/centitenka/comments-clean) | centitenka | ⭐ 2 | ✅ 原已 Star |
-| #19 | [issue-planner](https://github.com/centitenka/issue-planner) | centitenka | ⭐ 2 | ✅ 原已 Star |
-| #20 | [open-your-mind](https://github.com/centitenka/open-your-mind) | centitenka | ⭐ 2 | ✅ 原已 Star |
-| #21 | [project-board](https://github.com/centitenka/project-board) | centitenka | ⭐ 2 | ✅ 原已 Star |
-| #22 | [vibe-explainer](https://github.com/centitenka/vibe-explainer) | centitenka | ⭐ 2 | ✅ 原已 Star |
-| #23 | [agent-speak](https://github.com/KinomotoMio/agent-speak) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
-| #24 | [Amanita](https://github.com/KinomotoMio/Amanita) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
-| #25 | [Anything2Ontology](https://github.com/KinomotoMio/Anything2Ontology) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
-| #26 | [cli](https://github.com/KinomotoMio/cli) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
-| #27 | [deep-learning-from-scratch-4](https://github.com/KinomotoMio/deep-learning-from-scratch-4) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
-| #28 | [deepseek-harness](https://github.com/KinomotoMio/deepseek-harness) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
-| #29 | [dify](https://github.com/KinomotoMio/dify) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
-| #30 | [HustRef](https://github.com/KinomotoMio/HustRef) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
-| #31 | [linear-cli](https://github.com/KinomotoMio/linear-cli) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
-| #32 | [MaaAssistantArknights](https://github.com/KinomotoMio/MaaAssistantArknights) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
-| #33 | [MCPSecBench](https://github.com/KinomotoMio/MCPSecBench) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
-| #34 | [nanoclaw](https://github.com/KinomotoMio/nanoclaw) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
-| #35 | [obelisk](https://github.com/KinomotoMio/obelisk) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
-| #36 | [oil-motion](https://github.com/KinomotoMio/oil-motion) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
-| #37 | [opendal](https://github.com/KinomotoMio/opendal) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
-| #38 | [pdf2skills](https://github.com/KinomotoMio/pdf2skills) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
-| #39 | [TikzConvertor](https://github.com/KinomotoMio/TikzConvertor) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
-| #40 | [YASA-Engine](https://github.com/KinomotoMio/YASA-Engine) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
-| #41 | [YASA-UAST](https://github.com/KinomotoMio/YASA-UAST) | KinomotoMio | ⭐ 2 | ✅ 原已 Star |
-| #42 | [AIMoeMaker](https://github.com/proto-commons/AIMoeMaker) | proto-commons | ⭐ 1 | ✅ 原已 Star |
-| #43 | [hopper](https://github.com/proto-commons/hopper) | proto-commons | ⭐ 1 | ✅ 原已 Star |
-| #44 | [proto-skills](https://github.com/proto-commons/proto-skills) | proto-commons | ⭐ 1 | ✅ 原已 Star |
+## 输出
 
-</details>
+JSON 只保留自动化所需字段：执行状态、账号、总数、作者统计、新增或待新增项目、失败详情、API 计数、退出码和 `markdown`。中文 Markdown 包含总览、作者概览、变更列表和失败详情，不生成体积较大的项目排行榜。
 
-## 作者概览
+常见的“全部已 Star”路径只需一次 GraphQL 请求；脚本仅在 owner 超过 100 个公开仓库时分页，并只在实际新增后执行全量核验。
 
-| 作者 | 公开仓库 | 项目累计 Stars | 待新增 | 失败 |
-| --- | ---: | ---: | ---: | ---: |
-| centitenka | 11 | 26 | 0 | 0 |
-| KinomotoMio | 26 | 77 | 0 | 0 |
-| proto-commons | 7 | 26 | 0 | 0 |
+## 安全边界
 
-私有仓库：按规则不查询、不操作。
+- 仅响应显式的 `$wan-ge-niu-bi` 调用。
+- 目标固定为三个 owner 的公开仓库；不查询或操作私有仓库。
+- 只添加 Star，绝不取消已有 Star。
+- 不读取或打印 GitHub token。
+- 网络瞬时错误最多重试三次；失败会以状态和退出码明确返回。
 
-## 使用边界
-
-- 仅响应显式的 `$wan-ge-niu-bi` 调用；不会因普通的 GitHub、仓库、作者或 Star 请求而自动执行。
-- 目标固定为 `centitenka`、`KinomotoMio` 与 `proto-commons` 的公开仓库；不查询或操作私有仓库。
-- 只会添加 Star，绝不会取消任何已有 Star。
-- 每次执行都会重新发现公开仓库，并以脚本最终的核验结果为准。
-
-实现细节与故障处理规则见 [SKILL.md](SKILL.md)。
+执行和故障处理规则见 [SKILL.md](SKILL.md)。
