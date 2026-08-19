@@ -2,7 +2,14 @@
 
 [English](README.en.md) | [简体中文](README.md)
 
-一个仅在用户显式调用 `$wan-ge-niu-bi` 时运行的 Codex Skill。它使用 GitHub CLI，为 `centitenka`、`KinomotoMio` 与 `proto-commons` 当前拥有的全部公开仓库补齐 Star，并返回简洁、可核验的中文报告。
+一个通过 GitHub CLI，为 `centitenka`、`KinomotoMio` 和 `proto-commons` 名下全部公开仓库自动补齐 Star 的 Codex Skill。
+
+## 功能
+
+- 实时发现三个目标 owner 的全部公开仓库，包括 fork 和归档仓库。
+- 仅为缺失项目添加 Star。
+- 按当前 Star 数输出全部仓库的全局总榜。
+- 直接输出适合聊天框展示的 Markdown。
 
 ## 平台支持
 
@@ -11,32 +18,49 @@
 | Windows | `scripts/invoke-wan-ge-niu-bi.ps1` | PowerShell 5.1+、GitHub CLI |
 | Linux / macOS | `scripts/invoke-wan-ge-niu-bi.sh` | Bash 3.2+、GitHub CLI |
 
-Unix 版本不依赖 Python、独立 `jq`、Node.js 或 PowerShell。两个入口都使用 `gh` 当前账号的正常用户凭据。
-
-## 只读验证
+## 使用
 
 ```powershell
-pwsh -NoProfile -File scripts/invoke-wan-ge-niu-bi.ps1 -DryRun -OutputFormat Json
+& scripts/invoke-wan-ge-niu-bi.ps1
 ```
 
 ```bash
-bash scripts/invoke-wan-ge-niu-bi.sh --dry-run --output-format json
+bash scripts/invoke-wan-ge-niu-bi.sh
 ```
-
-Dry Run 会重新发现全部目标公开仓库并核对 Star 状态，但不会发起任何 PUT。移除 Dry Run 参数后，脚本只为缺失项目添加 Star。
 
 ## 输出
 
-JSON 只保留自动化所需字段：执行状态、账号、总数、作者统计、新增或待新增项目、失败详情、API 计数、退出码和 `markdown`。中文 Markdown 包含总览、作者概览、变更列表和失败详情，不生成体积较大的项目排行榜。
+脚本按 `Stars 降序 → 完整仓库名升序` 输出全部仓库。前三名使用 `🥇🥈🥉`，其余使用数字排名。全部仓库已 Star 时只需一次 GraphQL 请求；仅在实际写入后执行一次最终核验。
 
-常见的“全部已 Star”路径只需一次 GraphQL 请求；脚本仅在 owner 超过 100 个公开仓库时分页，并只在实际新增后执行全量核验。
+## 输出示例
+
+以下为实际输出节选，完整输出包含全部 45 个仓库：
+
+```text
+✅ 45/45 已 Star，本次新增 0
+账号：`Daniel9572`
+
+| # | 仓库 | Stars |
+| ---: | --- | ---: |
+| 🥇 | [KinomotoMio/ai-dokkai](https://github.com/KinomotoMio/ai-dokkai) | 14 |
+| 🥈 | [proto-commons/cc-persona](https://github.com/proto-commons/cc-persona) | 10 |
+| 🥉 | [KinomotoMio/Moodiary](https://github.com/KinomotoMio/Moodiary) | 9 |
+```
+
+## 实测
+
+2026-08-19 在 Windows PowerShell 5.1 环境中处理 45 个公开仓库，5 次真实运行取中位数：
+
+| 项目 | 结果 |
+| --- | ---: |
+| 全部已 Star，并输出完整总榜 | 3.053 秒 |
+| 执行结果输出 | 3,971 字符、4,001 bytes、约 1,001 tokens |
+| `SKILL.md` 与执行结果 | 约 1,163 tokens |
 
 ## 安全边界
 
 - 仅响应显式的 `$wan-ge-niu-bi` 调用。
-- 目标固定为三个 owner 的公开仓库；不查询或操作私有仓库。
+- 目标 owner 固定，不接受外部替换。
+- 不查询或操作私有仓库。
 - 只添加 Star，绝不取消已有 Star。
 - 不读取或打印 GitHub token。
-- 网络瞬时错误最多重试三次；失败会以状态和退出码明确返回。
-
-执行和故障处理规则见 [SKILL.md](SKILL.md)。

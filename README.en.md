@@ -2,7 +2,14 @@
 
 [English](README.en.md) | [简体中文](README.md)
 
-A Codex Skill that runs only when the user explicitly invokes `$wan-ge-niu-bi`. It uses GitHub CLI to add missing Stars across all public repositories currently owned by `centitenka`, `KinomotoMio`, and `proto-commons`, then returns a concise, verifiable Chinese report.
+A Codex Skill that uses GitHub CLI to add missing Stars across all public repositories owned by `centitenka`, `KinomotoMio`, and `proto-commons`.
+
+## Features
+
+- Discovers every public repository of the three target owners, including forks and archived repositories.
+- Adds only missing Stars.
+- Returns one global ranking of every repository by current Star count.
+- Prints Markdown ready for display in chat.
 
 ## Platform Support
 
@@ -11,32 +18,49 @@ A Codex Skill that runs only when the user explicitly invokes `$wan-ge-niu-bi`. 
 | Windows | `scripts/invoke-wan-ge-niu-bi.ps1` | PowerShell 5.1+, GitHub CLI |
 | Linux / macOS | `scripts/invoke-wan-ge-niu-bi.sh` | Bash 3.2+, GitHub CLI |
 
-The Unix implementation does not require Python, standalone `jq`, Node.js, or PowerShell. Both entrypoints use the normal credentials of the account currently authenticated in `gh`.
-
-## Read-only Validation
+## Usage
 
 ```powershell
-pwsh -NoProfile -File scripts/invoke-wan-ge-niu-bi.ps1 -DryRun -OutputFormat Json
+& scripts/invoke-wan-ge-niu-bi.ps1
 ```
 
 ```bash
-bash scripts/invoke-wan-ge-niu-bi.sh --dry-run --output-format json
+bash scripts/invoke-wan-ge-niu-bi.sh
 ```
-
-Dry Run rediscovers every target public repository and checks Star state without issuing a PUT. Removing the Dry Run flag allows the script to add only missing Stars.
 
 ## Output
 
-JSON contains only fields needed by automation: status, account, totals, owner summaries, added or pending repositories, failures, API counts, exit code, and `markdown`. The Chinese Markdown report contains a summary, owner overview, changes, and failures instead of a large project ranking.
+The scripts rank every repository by `Stars descending → full repository name ascending`. The top three use `🥇🥈🥉`; later entries use numeric ranks. The all-starred path uses one GraphQL request, and one final verification runs only after a write.
 
-The common all-starred path uses one GraphQL request. Pagination occurs only when an owner has more than 100 public repositories, and full verification occurs only after a write is needed.
+## Output Example
+
+This is an excerpt from a real run; the complete output contains all 45 repositories:
+
+```text
+✅ 45/45 已 Star，本次新增 0
+账号：`Daniel9572`
+
+| # | 仓库 | Stars |
+| ---: | --- | ---: |
+| 🥇 | [KinomotoMio/ai-dokkai](https://github.com/KinomotoMio/ai-dokkai) | 14 |
+| 🥈 | [proto-commons/cc-persona](https://github.com/proto-commons/cc-persona) | 10 |
+| 🥉 | [KinomotoMio/Moodiary](https://github.com/KinomotoMio/Moodiary) | 9 |
+```
+
+## Measured Run
+
+Measured on 2026-08-19 with Windows PowerShell 5.1 across 45 public repositories; values use the median of five real runs:
+
+| Item | Result |
+| --- | ---: |
+| All repositories already starred with the complete ranking returned | 3.053 seconds |
+| Execution output | 3,971 characters, 4,001 bytes, about 1,001 tokens |
+| `SKILL.md` and execution output | About 1,163 tokens |
 
 ## Safety Boundaries
 
 - Runs only after an explicit `$wan-ge-niu-bi` invocation.
-- Targets public repositories of the three fixed owners; private repositories are never queried or modified.
+- Target owners are fixed and cannot be replaced through arguments.
+- Private repositories are never queried or modified.
 - Adds Stars only and never removes an existing Star.
 - Never reads or prints a GitHub token.
-- Retries transient network failures up to three times and returns explicit statuses and exit codes.
-
-See [SKILL.md](SKILL.md) for execution and failure-handling rules.
